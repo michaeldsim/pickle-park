@@ -93,12 +93,6 @@ public class PickleListener extends ListenerAdapter {
                     if (attempts >= maxRetries) {
                         times[i] = "Failed to retrieve data after " + maxRetries + " attempts";
                         e.printStackTrace();
-                    } else {
-                        try {
-                            Thread.sleep(500 * attempts);
-                        } catch (InterruptedException ie) {
-                            Thread.currentThread().interrupt();
-                        }
                     }
                 }
             }
