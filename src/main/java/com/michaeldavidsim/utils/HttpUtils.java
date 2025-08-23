@@ -1,6 +1,8 @@
 package com.michaeldavidsim.utils;
 
 import java.io.IOException;
+import java.net.CookieManager;
+import java.net.CookiePolicy;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -22,5 +24,14 @@ public class HttpUtils {
         } else {
             throw new IOException("HTTP request failed with status code " + response.statusCode());
         }
+    }
+
+    public static HttpClient createHttpClient() {
+        CookieManager cookieManager = new CookieManager();
+        cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
+
+        return HttpClient.newBuilder()  
+                .cookieHandler(cookieManager)
+                .build();
     }
 }

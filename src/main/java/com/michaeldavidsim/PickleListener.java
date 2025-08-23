@@ -4,8 +4,6 @@ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
-import java.net.CookieManager;
-import java.net.CookiePolicy;
 import java.net.http.HttpClient;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -13,24 +11,26 @@ import java.util.Date;
 import java.util.List;
 
 import com.joestelmach.natty.Parser;
+import com.michaeldavidsim.models.openweathermodels.WeatherResponse;
 import com.michaeldavidsim.utils.EmbedUtils;
 import com.michaeldavidsim.utils.HttpUtils;
 import com.michaeldavidsim.utils.JsonUtils;
+import com.michaeldavidsim.utils.WeatherFetcher;
+import com.michaeldavidsim.utils.WeatherService;
 
 public class PickleListener extends ListenerAdapter {
 
     private final HttpClient httpClient;
+    private final WeatherService weatherService;
     private final String baseUrl = "https://secure.rec1.com/GA/gwinnett-county-parks-recreation/catalog/getFacilityHours/";
     private final String[] eeRobinsonCourts = {"/92843/665450/", "/92844/665452/", "/93224/665454/", "/93225/665456/", "/141095/665468/", "/141096/665470/"};
     private final String[] regularRateKeys = {"Pickleball $5", "Pickleball EE Robinson"};
+    private final String LATITUDE = "34.0977";
+    private final String LONGITUDE = "84.0429";
 
-    public PickleListener() {
-        CookieManager cookieManager = new CookieManager();
-        cookieManager.setCookiePolicy(CookiePolicy.ACCEPT_ALL);
-
-        this.httpClient = HttpClient.newBuilder()
-                .cookieHandler(cookieManager)
-                .build();
+    public PickleListener(HttpClient httpClient) {
+        this.httpClient = httpClient;
+        this.weatherService = new WeatherService(new WeatherFetcher(httpClient));
     }
 
     @Override
@@ -68,7 +68,8 @@ public class PickleListener extends ListenerAdapter {
         }
 
         final LocalDate finalTargetDate = targetDate;
-
+        WeatherResponse response = weatherService.getWeather(LATITUDE, LONGITUDE);
+        
         new Thread(() -> fetchAndSendAvailability((TextChannel) event.getChannel(), finalTargetDate)).start();
     }
 
