@@ -38,7 +38,8 @@ public class PickleListener extends ListenerAdapter {
         if (event.getAuthor().isBot()) return;
 
         String message = event.getMessage().getContentRaw();
-        if (!message.toLowerCase().startsWith("!pb")) return;
+        String prefix = System.getenv("PREFIX");
+        if (!message.toLowerCase().startsWith(prefix)) return;
 
         String[] parts = message.split("\\s+", 2);
         LocalDate now = LocalDate.now();
