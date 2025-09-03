@@ -26,7 +26,7 @@ public class PickleListener extends ListenerAdapter {
     private final String[] eeRobinsonCourts = {"/92843/665450/", "/92844/665452/", "/93224/665454/", "/93225/665456/", "/141095/665468/", "/141096/665470/"};
     private final String[] regularRateKeys = {"Pickleball $5", "Pickleball EE Robinson"};
     private final String LATITUDE = "34.0977";
-    private final String LONGITUDE = "84.0429";
+    private final String LONGITUDE = "-84.0429";
 
     public PickleListener(HttpClient httpClient) {
         this.httpClient = httpClient;
@@ -68,13 +68,13 @@ public class PickleListener extends ListenerAdapter {
         }
 
         final LocalDate finalTargetDate = targetDate;
-        WeatherResponse response = weatherService.getWeather(LATITUDE, LONGITUDE);
+        WeatherResponse weatherResponse = weatherService.getWeather(LATITUDE, LONGITUDE);
         
-        new Thread(() -> fetchAndSendAvailability((TextChannel) event.getChannel(), finalTargetDate)).start();
+        new Thread(() -> fetchAndSendAvailability((TextChannel) event.getChannel(), finalTargetDate, weatherResponse)).start();
     }
 
 
-    private void fetchAndSendAvailability(TextChannel channel, LocalDate targetDate) {
+    private void fetchAndSendAvailability(TextChannel channel, LocalDate targetDate, WeatherResponse weatherResponse) {
         String[] times = new String[eeRobinsonCourts.length];
         final int maxRetries = 3;
         final String id = generateId();
@@ -99,7 +99,7 @@ public class PickleListener extends ListenerAdapter {
             }
         }
 
-        EmbedUtils.sendCourtEmbed(channel, targetDate, times);
+        EmbedUtils.sendCourtEmbed(channel, targetDate, times, weatherResponse);
     }
 
 

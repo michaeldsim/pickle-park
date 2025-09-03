@@ -1,7 +1,6 @@
 package com.michaeldavidsim.utils;
 
 import java.io.IOException;
-import java.time.LocalDate;
 
 import com.michaeldavidsim.models.openweathermodels.WeatherResponse;
 
@@ -14,8 +13,7 @@ public class WeatherService {
     }
 
     public WeatherResponse getWeather(String lat, String lon) {
-        LocalDate day = LocalDate.now();
-        return cache.getOrLoad(day, () -> {
+        return cache.getOrLoad(() -> {
             try {
                 return fetcher.fetch(lat, lon);
             } catch (IOException | InterruptedException e) {

@@ -20,7 +20,7 @@ public class WeatherFetcher {
     }
 
     public WeatherResponse fetch(String latitude, String longitude) throws IOException, InterruptedException {
-        String query = String.format("?lat=%s&lon=%s&appid=%s", latitude, longitude, apiKey);
+        String query = String.format("?lat=%s&lon=%s&appid=%s&units=imperial", latitude, longitude, apiKey);
         HttpRequest request = HttpRequest.newBuilder()
             .uri(URI.create(baseUrl + query))
             .GET()
