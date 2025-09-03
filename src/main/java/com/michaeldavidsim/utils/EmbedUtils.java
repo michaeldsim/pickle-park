@@ -70,6 +70,7 @@ public class EmbedUtils {
                 channel.sendMessageEmbeds(embed.build()).queue();
             }
         } else {
+            embed.addField("Chart Data", "Chart is not rendered for dates after 2 days", false);
             channel.sendMessageEmbeds(embed.build()).queue();
         }
     }
