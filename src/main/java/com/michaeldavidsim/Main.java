@@ -22,8 +22,10 @@ public class Main {
             return;
         }
 
+        String prefix = System.getenv("PREFIX");
+
         JDABuilder.createDefault(token, GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT)
-                .setActivity(Activity.playing("Type !pp"))
+                .setActivity(Activity.playing("Type " + prefix))
                 .disableCache(CacheFlag.VOICE_STATE, CacheFlag.EMOJI, CacheFlag.STICKER, CacheFlag.SCHEDULED_EVENTS)
                 .addEventListeners(new PickleListener(httpClient))
                 .build();

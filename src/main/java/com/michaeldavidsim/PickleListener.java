@@ -5,10 +5,12 @@ import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
 import java.net.http.HttpClient;
+import java.sql.Time;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
+import java.util.TimeZone;
 
 import com.joestelmach.natty.Parser;
 import com.michaeldavidsim.models.openweathermodels.WeatherResponse;
@@ -46,7 +48,7 @@ public class PickleListener extends ListenerAdapter {
         LocalDate targetDate = now;
 
         if (parts.length > 1) {
-            Parser parser = new Parser();
+            Parser parser = new Parser(TimeZone.getTimeZone("America/New_York"));
             List<Date> dates = parser.parse(parts[1]).stream()
                                     .flatMap(group -> group.getDates().stream())
                                     .toList();

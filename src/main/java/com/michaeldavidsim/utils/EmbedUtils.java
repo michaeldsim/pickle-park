@@ -5,6 +5,7 @@ import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.EmbedBuilder;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 
@@ -56,7 +57,10 @@ public class EmbedUtils {
             embed.addField("Weather Data", "No forecast available for this date", false);
         }
 
-        if (withinTwoDays(date)) {
+        // don't render the chart if after 10 since we filter out that data and we don't really care about it anyway
+        LocalTime cutoff = LocalTime.of(22, 0);
+
+        if (withinTwoDays(date) && LocalTime.now().isBefore(cutoff)) {
             try {
                 byte[] bytes = WeatherChartRenderer.renderChart(response, date);
                 FileUpload fileUpload = FileUpload.fromData(bytes, "rain_chart.png");
@@ -70,7 +74,7 @@ public class EmbedUtils {
                 channel.sendMessageEmbeds(embed.build()).queue();
             }
         } else {
-            embed.addField("Chart Data", "Chart is not rendered for dates after 2 days", false);
+            embed.addField("Chart Data", "Chart is not rendered for dates after 2 days or after 10 PM", false);
             channel.sendMessageEmbeds(embed.build()).queue();
         }
     }
