@@ -1,38 +1,38 @@
 package com.michaeldavidsim;
 
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 
 import java.net.http.HttpClient;
-import java.sql.Time;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
 
-import com.joestelmach.natty.Parser;
 import com.michaeldavidsim.models.openweathermodels.WeatherResponse;
+import com.michaeldavidsim.parks.Park;
+import com.michaeldavidsim.parks.ParkRegistry;
+import com.michaeldavidsim.utils.AvailabilityCache;
 import com.michaeldavidsim.utils.EmbedUtils;
 import com.michaeldavidsim.utils.HttpUtils;
 import com.michaeldavidsim.utils.JsonUtils;
 import com.michaeldavidsim.utils.WeatherFetcher;
 import com.michaeldavidsim.utils.WeatherService;
+import org.natty.Parser;
 
 public class PickleListener extends ListenerAdapter {
 
     private final HttpClient httpClient;
     private final WeatherService weatherService;
-    private final String baseUrl = "https://secure.rec1.com/GA/gwinnett-county-parks-recreation/catalog/getFacilityHours/";
-    private final String[] eeRobinsonCourts = {"/92843/665450/", "/92844/665452/", "/93224/665454/", "/93225/665456/", "/141095/665468/", "/141096/665470/"};
-    private final String[] regularRateKeys = {"Pickleball $5", "Pickleball EE Robinson"};
-    private final String LATITUDE = "34.0977";
-    private final String LONGITUDE = "-84.0429";
+    private final Park park;
 
     public PickleListener(HttpClient httpClient) {
         this.httpClient = httpClient;
         this.weatherService = new WeatherService(new WeatherFetcher(httpClient));
+        this.park = ParkRegistry.EE_ROBINSON; // Default park for now
     }
 
     @Override
@@ -71,38 +71,99 @@ public class PickleListener extends ListenerAdapter {
         }
 
         final LocalDate finalTargetDate = targetDate;
-        WeatherResponse weatherResponse = weatherService.getWeather(LATITUDE, LONGITUDE);
-        
-        new Thread(() -> fetchAndSendAvailability((TextChannel) event.getChannel(), finalTargetDate, weatherResponse)).start();
+        WeatherResponse weatherResponse = weatherService.getWeather(park.getLatitude(), park.getLongitude());
+
+        new Thread(() -> fetchAndSendAvailability((TextChannel) event.getChannel(), finalTargetDate, weatherResponse, park)).start();
     }
 
+    @Override
+    public void onButtonInteraction(ButtonInteractionEvent event) {
+        String componentId = event.getComponentId();
 
-    private void fetchAndSendAvailability(TextChannel channel, LocalDate targetDate, WeatherResponse weatherResponse) {
-        String[] times = new String[eeRobinsonCourts.length];
+        if (!componentId.startsWith("park:")) {
+            return;
+        }
+
+        // Parse button ID: "park:ParkName:2025-10-07"
+        String[] parts = componentId.split(":", 3);
+        if (parts.length != 3) {
+            event.reply("Invalid button interaction").setEphemeral(true).queue();
+            return;
+        }
+
+        String parkName = parts[1];
+        LocalDate date = LocalDate.parse(parts[2]);
+
+        // Find the park by name
+        Park selectedPark = null;
+        for (Park p : ParkRegistry.PARKS) {
+            if (p.getName().equals(parkName)) {
+                selectedPark = p;
+                break;
+            }
+        }
+
+        if (selectedPark == null) {
+            event.reply("Park not found").setEphemeral(true).queue();
+            return;
+        }
+
+        // Acknowledge the interaction immediately
+        event.deferEdit().queue();
+
+        final Park finalPark = selectedPark;
+        WeatherResponse weatherResponse = weatherService.getWeather(finalPark.getLatitude(), finalPark.getLongitude());
+
+        new Thread(() -> updateEmbedWithPark(event, date, weatherResponse, finalPark)).start();
+    }
+
+    private void updateEmbedWithPark(ButtonInteractionEvent event, LocalDate targetDate, WeatherResponse weatherResponse, Park park) {
+        String[] times = AvailabilityCache.get(park.getName(), targetDate);
+
+        if (times == null) {
+            times = fetchAvailabilityData(park, targetDate);
+            AvailabilityCache.put(park.getName(), targetDate, times);
+        }
+
+        EmbedUtils.updateCourtEmbed(event, targetDate, times, weatherResponse, park);
+    }
+
+    private void fetchAndSendAvailability(TextChannel channel, LocalDate targetDate, WeatherResponse weatherResponse, Park park) {
+        String[] times = AvailabilityCache.get(park.getName(), targetDate);
+
+        if (times == null) {
+            times = fetchAvailabilityData(park, targetDate);
+            AvailabilityCache.put(park.getName(), targetDate, times);
+        }
+
+        EmbedUtils.sendCourtEmbed(channel, targetDate, times, weatherResponse, park);
+    }
+
+    private String[] fetchAvailabilityData(Park park, LocalDate targetDate) {
+        String[] times = new String[park.getCourtPaths().length];
         final int maxRetries = 3;
         final String id = generateId();
 
-        for (int i = 0; i < eeRobinsonCourts.length; i++) {
-            String completeUrl = baseUrl + id + eeRobinsonCourts[i] + targetDate.toString();
+        for (int i = 0; i < park.getCourtPaths().length; i++) {
+            String completeUrl = park.getBaseUrl() + id + park.getCourtPaths()[i] + targetDate.toString();
             int attempts = 0;
             boolean success = false;
 
             while (attempts < maxRetries && !success) {
                 try {
                     String response = HttpUtils.getString(httpClient, completeUrl);
-                    times[i] = JsonUtils.parseTimes(response, regularRateKeys);
+                    times[i] = JsonUtils.parseTimes(response, park.getRegularRateKeys());
                     success = true;
                 } catch (Exception e) {
                     attempts++;
                     if (attempts >= maxRetries) {
                         times[i] = "Failed to retrieve data after " + maxRetries + " attempts";
-                        e.printStackTrace();
                     }
                 }
             }
         }
 
-        EmbedUtils.sendCourtEmbed(channel, targetDate, times, weatherResponse);
+        return times;
     }
 
 

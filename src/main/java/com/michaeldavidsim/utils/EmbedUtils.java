@@ -1,12 +1,13 @@
 package com.michaeldavidsim.utils;
 
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.utils.FileUpload;
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import java.io.IOException;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 
 import org.slf4j.Logger;
@@ -14,20 +15,52 @@ import org.slf4j.LoggerFactory;
 
 import com.michaeldavidsim.models.openweathermodels.Daily;
 import com.michaeldavidsim.models.openweathermodels.WeatherResponse;
+import com.michaeldavidsim.parks.Park;
+import com.michaeldavidsim.parks.ParkRegistry;
 import com.michaeldavidsim.utils.chart.WeatherChartRenderer;
 
-import java.time.Instant;
-
-import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EmbedUtils {
     private static final Logger logger = LoggerFactory.getLogger(EmbedUtils.class);
 
-    public static void sendCourtEmbed(TextChannel channel, LocalDate date, String[] times, WeatherResponse response) {
+    public static void sendCourtEmbed(TextChannel channel, LocalDate date, String[] times, WeatherResponse response, Park park) {
+        EmbedBuilder embed = buildCourtEmbed(date, times, response, park);
+        List<Button> buttons = createParkButtons(park, date);
+
+        // don't render the chart if after 10 since we filter out that data and we don't really care about it anyway
+        LocalTime cutoff = LocalTime.of(22, 0);
+
+        if (withinTwoDays(date) && LocalTime.now().isBefore(cutoff)) {
+            try {
+                byte[] bytes = WeatherChartRenderer.renderChart(response, date);
+                FileUpload fileUpload = FileUpload.fromData(bytes, "rain_chart.png");
+
+                embed.setImage("attachment://rain_chart.png");
+                channel.sendMessageEmbeds(embed.build())
+                    .addFiles(fileUpload)
+                    .setComponents(ActionRow.of(buttons))
+                    .queue();
+            } catch (IOException e) {
+                logger.error("Error rendering chart: " + e.getMessage(), e);
+                channel.sendMessageEmbeds(embed.build())
+                    .setComponents(ActionRow.of(buttons))
+                    .queue();
+            }
+        } else {
+            embed.addField("Chart Data", "Chart is not rendered for dates after 2 days or after 10 PM", false);
+            channel.sendMessageEmbeds(embed.build())
+                .setComponents(ActionRow.of(buttons))
+                .queue();
+        }
+    }
+
+    private static EmbedBuilder buildCourtEmbed(LocalDate date, String[] times, WeatherResponse response, Park park) {
         EmbedBuilder embed = new EmbedBuilder();
-        embed.setTitle("🎾 EE Robinson Pickleball Court Availability");
-        embed.setColor(Color.GREEN);
-        embed.setDescription("Availability for " + date.toString());
+        embed.setTitle("\uD83C\uDFD3 " + park.getName() + " Pickleball Court Availability");
+        embed.setColor(park.getColor());
+        embed.setDescription("Availability for " + date.toString() + (isOpenPlay(date, park.getName()) ? " - OPEN PLAY" : ""));
 
         for (int i = 0; i < times.length; i++) {
             embed.addField("Pickleball Court " + (i + 1), times[i], false);
@@ -57,6 +90,32 @@ public class EmbedUtils {
             embed.addField("Weather Data", "No forecast available for this date", false);
         }
 
+        return embed;
+    }
+
+    private static List<Button> createParkButtons(Park currentPark, LocalDate date) {
+        List<Button> buttons = new ArrayList<>();
+
+        for (Park park : ParkRegistry.PARKS) {
+            String buttonId = "park:" + park.getName() + ":" + date.toString();
+            Button button;
+
+            if (park.getName().equals(currentPark.getName())) {
+                button = Button.primary(buttonId, park.getName()).asDisabled();
+            } else {
+                button = Button.secondary(buttonId, park.getName());
+            }
+
+            buttons.add(button);
+        }
+
+        return buttons;
+    }
+
+    public static void updateCourtEmbed(ButtonInteractionEvent event, LocalDate date, String[] times, WeatherResponse response, Park park) {
+        EmbedBuilder embed = buildCourtEmbed(date, times, response, park);
+        List<Button> buttons = createParkButtons(park, date);
+
         // don't render the chart if after 10 since we filter out that data and we don't really care about it anyway
         LocalTime cutoff = LocalTime.of(22, 0);
 
@@ -66,16 +125,21 @@ public class EmbedUtils {
                 FileUpload fileUpload = FileUpload.fromData(bytes, "rain_chart.png");
 
                 embed.setImage("attachment://rain_chart.png");
-                channel.sendMessageEmbeds(embed.build())
-                    .addFiles(fileUpload)
+                event.getHook().editOriginalEmbeds(embed.build())
+                    .setFiles(fileUpload)
+                    .setComponents(ActionRow.of(buttons))
                     .queue();
             } catch (IOException e) {
                 logger.error("Error rendering chart: " + e.getMessage(), e);
-                channel.sendMessageEmbeds(embed.build()).queue();
+                event.getHook().editOriginalEmbeds(embed.build())
+                    .setComponents(ActionRow.of(buttons))
+                    .queue();
             }
         } else {
             embed.addField("Chart Data", "Chart is not rendered for dates after 2 days or after 10 PM", false);
-            channel.sendMessageEmbeds(embed.build()).queue();
+            event.getHook().editOriginalEmbeds(embed.build())
+                .setComponents(ActionRow.of(buttons))
+                .queue();
         }
     }
 
@@ -98,5 +162,11 @@ public class EmbedUtils {
 
         long daysBetween = ChronoUnit.DAYS.between(today, targetDate);
         return daysBetween <= 2;
+    }
+
+    private static boolean isOpenPlay(LocalDate date, String park) {
+        DayOfWeek day = date.getDayOfWeek();
+
+        return !park.equals("Rock Springs") && (day == DayOfWeek.TUESDAY || day == DayOfWeek.THURSDAY);
     }
 }
